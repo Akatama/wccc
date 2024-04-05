@@ -1,4 +1,5 @@
-***wccc - wc Coding Challenges ***
+# wccc - wc Coding Challenges
+
 This is a small project I did to learn a bit about C.
 
 The instructions are here: https://codingchallenges.fyi/challenges/challenge-wc/
