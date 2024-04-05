@@ -7,20 +7,34 @@
 #include <wchar.h>
 #include <wctype.h>
 
-int wc(bool byteflag, bool lineflag, bool wordflag, bool charflag, char *fileName);
+typedef struct {
+    unsigned long byteCount;
+    unsigned long charCount;
+    unsigned long wordCount;
+    unsigned long lineCount;
+} File_Counter;
+
+void print_help();
+
+File_Counter wc(FILE * fptr);
 
 int main(int argc, char **argv)
 {
+    FILE *fptr;
+
     bool byteflag = false;
     bool lineflag = false;
     bool wordflag = false;
     bool charflag = false;
+    bool helpflag = false;
 
     char *fileName = NULL;
     int options;
 
+    // Need to set locality for wide characters
     setlocale(LC_ALL, "");
-    while (( options = getopt(argc, argv, "clwm")) != -1)
+    
+    while (( options = getopt(argc, argv, "clwmh")) != -1)
         switch(options)
         {
             case 'c':
@@ -35,106 +49,133 @@ int main(int argc, char **argv)
             case 'm':
                 charflag = true;
                 break;
+            case 'h':
+                helpflag = true;
+                break;
             case '?':
                 printf("Error Unknwon option %c\n", optopt);
                 exit(EXIT_FAILURE);
         }
+
+    if(helpflag)
+    {
+        print_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    if(!byteflag && !lineflag && !wordflag && !charflag)
+    {
+        byteflag = true;
+        lineflag = true;
+        wordflag = true;
+    }
+
     if(optind < argc)
     {
         fileName = argv[optind];
-    }
-    else
-    {
-        printf("Must provide a file to use wccc\n");
-        exit(1);
-    }
 
-    return wc(byteflag, lineflag, wordflag, charflag, fileName);
-
-}
-
-
-int wc(bool byteflag, bool lineflag, bool wordflag, bool charflag, char *fileName)
-{
-    if(wordflag || lineflag || charflag)
-    {
-
-        FILE *fptr = fopen(fileName, "r");
+        fptr = fopen(fileName, "r");
         if(fptr == NULL)
         {
             printf("Not able to open the file.\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
+    }
+    else
+    {
+        fptr = stdin;
+    }
+    
 
+    File_Counter counter = wc(fptr);
 
-        unsigned long wordCount = 0;
-        unsigned long lineCount = 0;
-        unsigned long charCount = 0;
-        bool isWord = false;
-        wint_t ch;
-        while ((ch = fgetwc(fptr)) != WEOF)
-        {
-            charCount++;
-            if (ch == L'\n')
-            {
-                lineCount++;
-            }
+    fclose(fptr);
 
-            bool isSpace = iswspace(ch);
+    if(lineflag)
+    {
+        printf(" %ld", counter.lineCount);
+    }
 
-            if(isWord)
-            {
-                if(isSpace)
-                {
-                    //word has ended
-                    isWord = false;
-                }
-            }
-            else
-            {
-                if(!isSpace)
-                {
-                    // word has begun
-                    isWord = true;
-                    wordCount++;
-                }
-            }
+    if(wordflag)
+    {
+        printf(" %ld", counter.wordCount);
+    }
 
-            
-        }
-        
-        if(lineflag)
-        {
-            printf(" %ld", lineCount);
-        }
-
-        if(wordflag)
-        {
-            printf(" %ld", wordCount);
-        }
-
-        if(charflag)
-        {
-            printf(" %ld", charCount);
-        }
-
+    if(charflag)
+    {
+        printf(" %ld", counter.charCount);
     }
 
     if(byteflag)
     {
-        
-        struct stat sb;
-        if(stat(fileName, &sb) == -1)
+        printf(" %ld", counter.byteCount);
+    }
+
+    if(fileName)
+    {
+        printf(" %s", fileName);
+    }
+
+    printf("\n");
+
+    return 0;
+}
+
+
+File_Counter wc(FILE *fptr)
+{
+    File_Counter counter = { .byteCount = 0, .lineCount = 0, .wordCount = 0, .charCount = 0 };
+    bool isWord = false;
+    wint_t ch;
+    char buffer[8];
+    while ((ch = fgetwc(fptr)) != WEOF)
+    {
+        counter.charCount++;
+
+        //convert wide character to multibyte and add the length to the sum of bytes
+        counter.byteCount += wctomb(buffer, ch);
+
+        if (ch == L'\n')
         {
-            printf("Error getting stats of file: %s\n", fileName);
-            exit(1);
+            counter.lineCount++;
+        }
+
+        bool isSpace = iswspace(ch);
+
+        if(isWord)
+        {
+            if(isSpace)
+            {
+                //word has ended
+                isWord = false;
+            }
         }
         else
         {
-            printf(" %lld", (long long) sb.st_size);
+            if(!isSpace)
+            {
+                // word has begun
+                isWord = true;
+                counter.wordCount++;
+            }
         }
 
+
     }
-    printf(" %s\n", fileName);
-    return 0;
+
+    return counter;
+}
+
+/**
+ * @brief Print help
+ */
+void print_help()
+{
+    printf("Usage: wccc [OPTION] ... [FILE]\n\n");
+    printf("Print line, word, char and byte counts for FILE.\n\n");
+    printf("-c\tprints the byte count\n");
+    printf("-m\tprints the character count\n");
+    printf("-l\tprints the word count\n");
+    printf("-w\tprints the word count\n\n");
+    printf("Without FILE, read standard intput\n");
 }
